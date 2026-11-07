@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Trip planner</title>
+<meta name="description" content="A day-by-day trip plan with a route map, stays, budget and booking timeline.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<!-- All of your trip lives in trip.js. You shouldn't need to edit this file. -->
+<script src="trip.js"></script>
+<script>
+/* Apply the page title and fonts from trip.js before the page draws, so nothing flashes. */
+(function(){
+  var T=window.TRIP||{},th=T.theme||{},f=th.fonts||{};
+  if(T.pageTitle||(T.hero&&T.hero.title))document.title=T.pageTitle||T.hero.title;
+  if(T.description){var m=document.querySelector('meta[name=description]');m&&m.setAttribute('content',T.description);}
+  var url=f.url||'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap';
+  var l=document.createElement('link');l.rel='stylesheet';l.href=url;document.head.appendChild(l);
+})();
+</script>
+<style>
+/* Layout: one 1180px column with a fixed side gutter; hero photo full-bleed; the route map is the centrepiece,
+   with the day strip above it and the day panel beside it. Day entries are single-column photo/text spreads.
+   Colours and fonts below are defaults: override them from trip.js (theme.colors, theme.fonts). */
+/* Layout: one 1180px column with a fixed side gutter; hero photo full-bleed; the route map is the centrepiece,
+   with the day strip above it and the day panel beside it. Day entries are single-column photo/text spreads. */
+:root{
+  --paper:#f5f2ec;      /* kinari paper */
+  --paper-2:#ebe6dc;    /* alternate band */
+  --card:#fffdf9;
+  --ink:#1d2027;        /* sumi */
+  --ink-2:#4b505b;
+  --ink-3:#777b84;
+  --ai:#25406a;         /* indigo: overnight bases, headings accents */
+  --ai-soft:#dfe5ef;
+  --kaki:#cf5f2b;       /* persimmon: the selected day */
+  --kaki-soft:#f8e4d8;
+  --moss:#5d6e43;       /* optional / excursion */
+  --moss-soft:#e5eadb;
+  --line:#dcd6ca;
+  --sea:#dbe4ea;
+  --land:#f4f0e7;
+  --warn-bg:#fbf0dd; --warn-ink:#6d4a17; --warn-line:#e2bf86;
+  --ok:#2e7d4f;         /* booked */
+  --ok-soft:#e3f1e8;
+  --todo:#c0392b;       /* not booked yet */
+  --todo-soft:#fbe6e3;
+  --font-display:'Fraunces',Georgia,'Times New Roman',serif;
+  --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'DM Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  --gutter:clamp(16px,4vw,40px);
+  --radius:14px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.7 var(--font-body);font-feature-settings:"palt" 0}
+img{max-width:100%;display:block}
+a{color:var(--ai);text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:var(--kaki)}
+:focus-visible{outline:3px solid var(--kaki);outline-offset:2px;border-radius:6px}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;line-height:1.2;text-wrap:balance;margin:0}
+p{margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:var(--gutter)}
+.eyebrow{font:500 12px/1.4 var(--font-body);letter-spacing:.18em;text-transform:uppercase;color:var(--kaki)}
+.eyebrow .local{letter-spacing:.3em;margin-right:.4em}
+.section{padding-block:clamp(48px,8vw,88px)}
+.section.band{background:var(--paper-2)}
+.section-head{display:grid;gap:10px;max-width:760px;margin-bottom:28px}
+.section-head h2{font-size:clamp(30px,4.4vw,46px);font-weight:800}
+.section-head p{color:var(--ink-2)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* ---------- Hero ---------- */
+.hero{position:relative;color:#fff;background:#1b1d22;overflow:hidden;isolation:isolate}
+.hero img.hero-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 62%;z-index:-2}
+.hero::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(14,16,22,.62) 0%,rgba(14,16,22,.28) 55%,rgba(14,16,22,0) 80%),linear-gradient(180deg,rgba(14,16,22,.1) 0%,rgba(14,16,22,.2) 35%,rgba(14,16,22,.85) 100%)}
+.hero h1,.hero-lede{text-shadow:0 2px 18px rgba(0,0,0,.35)}
+.hero-inner{padding-block:clamp(120px,22vw,250px) clamp(28px,5vw,48px);display:grid;gap:18px}
+.hero .eyebrow{color:#f6d9c4}
+.hero h1{font-size:clamp(48px,9vw,112px);font-weight:800;letter-spacing:-.01em;line-height:1.02}
+.hero-lede{max-width:620px;font-size:clamp(16px,1.8vw,19px);color:#eceae4}
+.hero-stats{display:flex;flex-wrap:wrap;gap:0;margin-top:12px;border-top:1px solid rgba(255,255,255,.28)}
+.hero-stats div{padding:14px 28px 4px 0;margin-right:28px;border-right:1px solid rgba(255,255,255,.18)}
+.hero-stats div:last-child{border-right:0}
+.hero-stats b{display:block;font:700 22px/1.2 var(--font-display)}
+.hero-stats small{font-size:12px;letter-spacing:.08em;color:#d9d6ce;text-transform:uppercase}
+.hero-credit{position:absolute;right:12px;bottom:8px;font-size:11px;color:rgba(255,255,255,.7)}
+.print-btn{justify-self:start;margin-top:6px;font:500 13px var(--font-body);color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:8px 16px;cursor:pointer}
+.print-btn:hover{background:rgba(255,255,255,.2)}
+
+/* ---------- Route map ---------- */
+.strip-scroll{overflow-x:auto;margin-inline:calc(var(--gutter)*-1);padding-inline:var(--gutter);scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.strip{display:grid;grid-template-columns:repeat(13,minmax(64px,1fr));gap:6px;min-width:860px;padding-bottom:10px}
+.chip{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 4px 7px;cursor:pointer;display:grid;justify-items:center;gap:1px;font-family:var(--font-body);transition:border-color .15s,background .15s,transform .15s}
+.chip:hover{border-color:var(--ink-3);transform:translateY(-1px)}
+.chip .d{font:500 11px/1.2 var(--font-mono);color:var(--ink-3);letter-spacing:.04em}
+.chip .k{font:700 17px/1.35 var(--font-display)}
+.chip .w{font-size:11px;color:var(--ink-2);line-height:1.2}
+.chip.all .k{font-size:15px}
+.chip[aria-pressed="true"]{background:var(--kaki);border-color:var(--kaki);color:#fff}
+.chip[aria-pressed="true"] .d,.chip[aria-pressed="true"] .w{color:#fde9dd}
+.chip.trip{border-style:dashed}
+.chip.trip[aria-pressed="true"]{border-style:solid}
+
+.map-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:18px;align-items:stretch}
+.map-frame{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:var(--sea);min-height:560px}
+#map{position:absolute;inset:0;background:var(--sea)}
+.map-tools{position:absolute;left:12px;top:12px;z-index:800;display:flex;gap:8px;flex-wrap:wrap}
+.map-btn{appearance:none;border:1px solid rgba(29,32,39,.18);background:rgba(255,253,249,.95);color:var(--ink);border-radius:999px;padding:7px 13px;font:500 13px var(--font-body);cursor:pointer;box-shadow:0 2px 8px rgba(29,32,39,.12)}
+.map-btn:hover{background:#fff;border-color:var(--ink-3)}
+.map-mode{position:absolute;left:12px;bottom:12px;z-index:800;font-size:11px;background:rgba(255,253,249,.92);border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink-2)}
+.map-mode[hidden]{display:none}
+.map-legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px;font-size:13px;color:var(--ink-2)}
+.map-legend span{display:inline-flex;align-items:center;gap:8px}
+.lg-line{width:28px;height:0;border-top:3px solid var(--kaki)}
+.lg-line.base{border-top:2.5px dashed var(--ai)}
+.lg-line.opt{border-top:2.5px dotted var(--moss)}
+.lg-line.walk{border-top:3px dotted var(--kaki)}
+.lg-line.air{border-top:3px dashed var(--kaki)}
+.lg-dot{width:14px;height:14px;border-radius:50%;background:var(--ai);border:2px solid #fff;box-shadow:0 0 0 1px var(--ai)}
+.lg-num{width:18px;height:18px;border-radius:50%;background:var(--kaki);color:#fff;font:700 10px/18px var(--font-mono);text-align:center}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 22px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.panel-date{font:500 12px/1.3 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--kaki)}
+.pager{display:flex;gap:6px}
+.pager button{appearance:none;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:16px/1 var(--font-body);cursor:pointer}
+.pager button:hover:not(:disabled){border-color:var(--ink-3);background:#fff}
+.pager button:disabled{opacity:.35;cursor:default}
+.panel-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.panel h3{font-size:clamp(24px,2.6vw,30px);font-weight:800}
+.panel .kanji-badge{font:800 26px/1 var(--font-display);color:var(--ai);letter-spacing:.08em;flex:none;padding-top:2px}
+.panel-sum{color:var(--ink-2);font-size:15px}
+.stops{list-style:none;margin:0;padding:0;display:grid;gap:0;border-left:2px solid var(--kaki-soft);margin-left:10px}
+.stops li{position:relative;padding:6px 0 6px 22px;font-size:14.5px;line-height:1.45}
+.stops li .n{position:absolute;left:-11px;top:6px;width:20px;height:20px;border-radius:50%;background:var(--kaki);color:#fff;font:700 10.5px/20px var(--font-mono);text-align:center}
+.stops li.opt .n{background:var(--card);color:var(--moss);box-shadow:inset 0 0 0 2px var(--moss)}
+.stops li small{display:block;color:var(--ink-3);font-size:12.5px}
+.stops li button{all:unset;cursor:pointer;font-weight:500}
+.stops li button:hover{color:var(--kaki)}
+.stops li button:focus-visible{outline:2px solid var(--kaki);outline-offset:2px}
+.ticket{position:relative;background:var(--ai-soft);border-radius:10px;padding:12px 14px 12px 16px;font-size:13.5px;line-height:1.55;color:#22324d}
+.ticket b{display:block;font:500 11px/1.4 var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ai);margin-bottom:2px}
+.panel-links{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:14px;margin-top:auto;padding-top:4px}
+.bases{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.bases li button{all:unset;box-sizing:border-box;cursor:pointer;width:100%;display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--paper)}
+.bases li button:hover{border-color:var(--ink-3);background:#fff}
+.bases li button:focus-visible{outline:2px solid var(--kaki);outline-offset:2px}
+.bases .bk{font:800 18px/1 var(--font-display);color:var(--ai);text-align:center}
+.bases .bn{font-weight:500;font-size:14.5px;line-height:1.3}
+.bases .bn small{display:block;font-weight:400;color:var(--ink-3);font-size:12.5px}
+.bases .bd{font:500 12px var(--font-mono);color:var(--ink-2);white-space:nowrap}
+
+/* Leaflet marker + tooltip styling */
+.leaflet-container{font-family:var(--font-body);background:var(--sea)}
+.tiles-warm{filter:saturate(.9) sepia(.06)}
+.mk-base{width:30px;height:30px;border-radius:50%;background:var(--ai);color:#fff;display:grid;place-items:center;font:800 13px/1 var(--font-display);border:2.5px solid #fff;box-shadow:0 2px 6px rgba(20,30,50,.35)}
+.mk-base.dim{opacity:.55}
+.mk-stop{width:26px;height:26px;border-radius:50%;background:var(--kaki);color:#fff;display:grid;place-items:center;font:700 12px/1 var(--font-mono);border:2.5px solid #fff;box-shadow:0 2px 6px rgba(80,30,10,.35)}
+.mk-stop.opt{background:#fff;color:var(--moss);border-color:var(--moss)}
+.mk-stop.hi{transform:scale(1.25)}
+.leaflet-tooltip.tt{background:rgba(255,253,249,.97);border:1px solid var(--line);border-radius:8px;box-shadow:0 2px 8px rgba(29,32,39,.15);color:var(--ink);font:500 12.5px/1.3 var(--font-body);padding:4px 8px;white-space:nowrap}
+.leaflet-tooltip.tt small{display:block;font-weight:400;color:var(--ink-3);font-size:11px}
+.leaflet-tooltip.tt.base{font-weight:700}
+.leaflet-tooltip-left.tt::before{border-left-color:var(--line)}
+.leaflet-tooltip-right.tt::before{border-right-color:var(--line)}
+.leaflet-tooltip-top.tt::before{border-top-color:var(--line)}
+.leaflet-tooltip-bottom.tt::before{border-bottom-color:var(--line)}
+.leaflet-control-attribution{font-size:10px;background:rgba(255,253,249,.85)!important}
+.leaflet-control-zoom a{color:var(--ink)!important}
+.map-msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--ink-2);font-size:15px}
+
+/* ---------- Day by day ---------- */
+.days{display:grid;gap:22px}
+.day{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.15fr);background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;scroll-margin-top:16px;transition:box-shadow .2s,border-color .2s}
+.day.is-current{border-color:var(--kaki);box-shadow:0 0 0 2px var(--kaki)}
+.day-photo{position:relative;margin:0;min-height:320px;background:var(--paper-2)}
+.day-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.day-photo.plain{display:grid;place-items:center;background:var(--ai)}
+.day-photo.plain span{font:800 clamp(64px,9vw,112px)/1 var(--font-display);color:rgba(255,255,255,.88);letter-spacing:.14em;margin-bottom:28px}
+.day-photo figcaption{position:absolute;left:0;right:0;bottom:0;padding:34px 14px 10px;background:linear-gradient(180deg,transparent,rgba(12,14,18,.72));color:#fff;font-size:13px;line-height:1.4}
+.day-photo figcaption .cr{display:block;font-size:10.5px;color:rgba(255,255,255,.72);margin-top:2px}
+.day-body{padding:24px clamp(18px,3vw,32px) 24px;display:grid;gap:14px;align-content:start;min-width:0}
+.day-head{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:start}
+.stamp{width:60px;height:60px;border-radius:50%;border:2px solid var(--kaki);color:var(--kaki);display:grid;place-items:center;align-content:center;line-height:1;transform:rotate(-6deg)}
+.stamp b{font:700 20px/1 var(--font-mono)}
+.stamp span{font:500 9.5px/1.2 var(--font-mono);margin-top:3px;letter-spacing:-.02em}
+.day-meta{font:500 12px/1.4 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.day h3{font-size:clamp(22px,2.4vw,28px);font-weight:800}
+.day .kanji{font:800 30px/1 var(--font-display);color:var(--ai);letter-spacing:.1em;opacity:.9}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:12px;line-height:1;border-radius:999px;padding:6px 10px;background:var(--paper-2);color:var(--ink-2)}
+.day ul{margin:0;padding-left:20px;display:grid;gap:6px;font-size:15px}
+.day ul li::marker{color:var(--kaki)}
+.day ul li.timed{display:grid;grid-template-columns:8.6em minmax(0,1fr);gap:10px;list-style:none;margin-left:-20px}
+.day ul li.timed .t{font:500 12.5px/1.9 var(--font-mono);color:var(--kaki)}
+.day ul li.opt .t{color:var(--moss)}
+.day ul .ih{display:block;font-weight:700;font-size:15.5px;line-height:1.4;color:var(--ink)}
+.day ul .ih .gs{margin-left:6px;vertical-align:1px}
+.day ul .ix{margin:2px 0 0;font-size:14px;line-height:1.55;color:var(--ink-2)}
+.day ul li.timed{padding:3px 0}
+.go-sum,.day-tot{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.day-tot{align-items:center;margin-top:8px;font-size:12.5px;color:var(--ink-2)}
+.gs{font:500 11.5px/1.5 var(--font-mono);padding:2px 9px;border-radius:999px;background:var(--paper-2);color:var(--ink-2);white-space:nowrap}
+.gs b{font-weight:700}
+.ticket .gs b{display:inline;font:inherit;font-weight:700;letter-spacing:0;text-transform:none;color:inherit;margin:0}
+.gs-train{background:var(--kaki-soft);color:#8a3b14}
+.gs-walk{background:var(--moss-soft);color:#3f4c2c}
+.gs-bus,.gs-taxi{background:var(--ai-soft);color:var(--ai)}
+.gs-ropeway{background:#efe6f3;color:#5b3a6b}
+.gs-opt{background:transparent;border:1px dashed var(--moss);color:var(--moss)}
+.day ul .legs{list-style:none;margin:7px 0 2px;padding:0 0 0 10px;border-left:2px solid var(--line);display:grid;gap:4px;font-size:13px;line-height:1.45;color:var(--ink-2)}
+.day ul .legs li{display:grid;grid-template-columns:9.2em minmax(0,1fr);gap:8px;list-style:none}
+.day ul .legs li::marker{content:none}
+.legs .lm{font:500 11.5px/1.6 var(--font-mono);color:var(--ink-3);white-space:nowrap}
+.legs .lg-train .lm,.legs .lg-shinkansen .lm,.legs .lg-subway .lm,.legs .lg-cable .lm{color:#a24a1c}
+.legs .lg-walk .lm{color:var(--moss)}
+@media (max-width:520px){.day ul .legs li{grid-template-columns:1fr;gap:0}}
+@media (max-width:520px){.day ul li.timed{grid-template-columns:1fr;gap:0}}
+.sleep{font-size:14px;color:var(--ink-2)}
+.sleep b{color:var(--ink)}
+.note{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.55;color:var(--warn-ink)}
+.note b{color:#5a3a0b}
+.day-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn-line{appearance:none;font:500 13.5px var(--font-body);color:var(--ai);background:transparent;border:1px solid var(--ai);border-radius:999px;padding:7px 14px;cursor:pointer}
+.btn-line:hover{background:var(--ai);color:#fff}
+.day:nth-child(even){grid-template-columns:minmax(0,1.15fr) minmax(0,.95fr)}
+.day:nth-child(even) .day-photo{order:2}
+
+/* ---------- Stays ---------- */
+.nights{display:flex;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin-bottom:8px;background:var(--card)}
+.nights div{padding:12px 10px;min-width:0;border-right:1px solid rgba(255,255,255,.55);color:#fff}
+.nights div:last-child{border-right:0}
+.nights b{display:block;font:700 15px/1.2 var(--font-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nights small{font:500 11px/1.3 var(--font-mono);opacity:.9;white-space:nowrap}
+.nights .ns{display:none}
+.nights-scale{display:flex;justify-content:space-between;font:500 11px var(--font-mono);color:var(--ink-3);margin-bottom:24px}
+.hotels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.hotel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:grid;gap:8px;align-content:start}
+.hotel .when{font:500 11.5px/1.4 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--kaki)}
+.hotel h3{font-size:20px}
+.hotel p{font-size:14px;color:var(--ink-2)}
+.hotel a{font-size:14px;font-weight:500}
+.hotel.is-booked{border-color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
+.hotel.is-todo{border-color:var(--todo);box-shadow:inset 0 0 0 1px var(--todo)}
+.hotel .status{justify-self:start}
+.hotel .value{font-size:13.5px;color:var(--ink-2);background:var(--paper);border-radius:10px;padding:9px 11px}
+.hotel .value b{color:var(--ink)}
+.status{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font:700 11.5px/1.4 var(--font-body);letter-spacing:.02em;white-space:nowrap}
+.status.ok{background:var(--ok);color:#fff}
+.status.todo{background:var(--todo);color:#fff}
+.book-summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 16px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:14.5px}
+.book-summary b{font-weight:700}
+.book-summary .left{color:var(--todo);font-weight:500}
+.book-summary.done .left{color:var(--ok)}
+.sleep .status{margin-left:6px;vertical-align:1px}
+.bases .bd .status{display:flex;justify-content:center;margin-top:4px;padding:1px 8px;font-size:10.5px}
+
+/* ---------- Budget ---------- */
+.budget-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:28px;align-items:start}
+.budget-total{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+.budget-total b{font:800 46px/1 var(--font-display)}
+.budget-total span{color:var(--ink-2);font-size:14px}
+.stack{display:flex;height:22px;border-radius:999px;overflow:hidden;margin-bottom:18px;background:var(--paper-2)}
+.stack i{display:block;height:100%}
+.brows{display:grid;gap:0}
+.brow{display:grid;grid-template-columns:14px 1fr auto;gap:12px;align-items:baseline;padding:12px 0;border-top:1px solid var(--line)}
+.brow:last-child{border-bottom:1px solid var(--line)}
+.brow .sw{width:12px;height:12px;border-radius:3px;transform:translateY(1px)}
+.brow b{font-weight:700}
+.brow p{font-size:13.5px;color:var(--ink-2)}
+.brow .amt{font:500 16px var(--font-mono)}
+.brow .pct{display:block;text-align:right;font:400 11.5px var(--font-mono);color:var(--ink-3)}
+.hotel-spend{margin-top:26px}
+.hotel-spend h3{font-size:19px;margin-bottom:6px}
+.srow{display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:baseline;padding:11px 0;border-top:1px solid var(--line)}
+.srow .sk{font:800 17px/1 var(--font-display);color:var(--ai);text-align:center}
+.srow small{font:500 11.5px var(--font-mono);color:var(--ink-3);margin-right:6px}
+.srow .status{font-size:10.5px;padding:1px 8px;vertical-align:1px}
+.srow p{font-size:13px;color:var(--ink-2);margin-top:2px}
+.srow .amt{font:500 16px var(--font-mono);text-align:right}
+.srow .pct{display:block;text-align:right;font:400 11px var(--font-mono);color:var(--ink-3);white-space:nowrap}
+.stotal{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;padding:12px 0;border-top:2px solid var(--ink);font-size:14.5px}
+.stotal .over{color:var(--todo);font-weight:600}
+.stotal .under{color:var(--ok);font-weight:600}
+.snote{font-size:13px;color:var(--ink-2)}
+.hotel .spend{font-size:13.5px;color:var(--ink);background:var(--ai-soft);border-radius:10px;padding:8px 11px}
+.fine{font-size:14px;color:var(--ink-2);display:grid;gap:10px}
+
+/* ---------- Priorities / checks ---------- */
+.prio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.prio div{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.prio h3{font-size:18px;margin-bottom:6px;display:flex;align-items:baseline;gap:8px}
+.prio h3 span{font-size:15px;color:var(--ai)}
+.prio p{font-size:14px;color:var(--ink-2)}
+.bk-groups{display:grid;gap:26px}
+.bk-group h3{font-size:19px;margin-bottom:8px}
+.bk{list-style:none;margin:0;padding:0;display:grid;gap:0;border-top:1px solid var(--line)}
+.bk li{display:grid;grid-template-columns:13.5em minmax(0,1fr);gap:14px;padding:13px 0;border-bottom:1px solid var(--line)}
+.bk-when b{display:block;font:600 13px/1.4 var(--font-mono);color:var(--kaki)}
+.bk-alt .bk-when b{color:var(--ai)}
+.bk-when small{display:block;font:400 11.5px/1.4 var(--font-mono);color:var(--ink-3);margin-top:2px}
+.bk-h{font-weight:700;font-size:15.5px;line-height:1.4}
+.bk-for{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:var(--kaki-soft);color:#8a3b14;font:500 11px/1.6 var(--font-mono);vertical-align:1px}
+.bk-body p{font-size:14px;color:var(--ink-2);margin-top:2px}
+.bk-body .bk-how{font-size:13px;color:var(--ink-3)}
+@media (max-width:620px){.bk li{grid-template-columns:1fr;gap:4px}}
+.checks{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-top:22px}
+.checks > div{border-radius:var(--radius);padding:20px}
+.checks .todo{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-ink)}
+.checks .later{background:var(--card);border:1px solid var(--line)}
+.checks h3{font-size:19px;margin-bottom:10px;color:var(--ink)}
+.checks ul{margin:0;padding-left:20px;display:grid;gap:6px;font-size:14px}
+
+/* ---------- Footer ---------- */
+footer{background:#1f2633;color:#d8dbe2;padding-block:48px 40px}
+footer .sign{font:800 clamp(26px,3.5vw,36px)/1.2 var(--font-display);color:#fff;margin-bottom:6px}
+footer p{font-size:14px;color:#b7bcc7}
+footer .credits{margin-top:26px;border-top:1px solid rgba(255,255,255,.14);padding-top:18px;font-size:12px;color:#9aa1ae;display:grid;gap:8px}
+footer .credits ul{margin:0;padding-left:18px;columns:2;column-gap:32px}
+footer .credits li{break-inside:avoid;margin-bottom:3px}
+footer a{color:#cfd7e6}
+footer a:hover{color:#fff}
+
+/* ---------- Responsive ---------- */
+@media (max-width:980px){
+  .map-grid{grid-template-columns:1fr}
+  .map-frame{min-height:0;height:min(68vh,520px)}
+  .day,.day:nth-child(even){grid-template-columns:1fr}
+  .day:nth-child(even) .day-photo{order:0}
+  .day-photo{min-height:0;aspect-ratio:16/10}
+  .hotels,.prio{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .budget-grid{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  body{font-size:15.5px}
+  .hero-stats div{padding-right:16px;margin-right:16px}
+  .hero-stats b{font-size:18px}
+  .map-frame{height:420px}
+  .hotels,.prio,.checks{grid-template-columns:1fr}
+  .day-head{grid-template-columns:auto 1fr}
+  .day .kanji{display:none}
+  .nights div{padding:10px 4px;text-align:center}
+  .nights .nl{display:none}.nights .ns{display:inline}
+  .nights b{font-size:14px;text-overflow:clip}
+  .nights small{font-size:11px}
+  footer .credits ul{columns:1}
+}
+@media print{
+  .hero{color:#000;background:#fff}.hero::after,.hero img.hero-photo,.print-btn,.hero-credit{display:none}
+  .hero .eyebrow,.hero-lede,.hero-stats small{color:#333}.hero-stats{border-color:#999}.hero-stats div{border-color:#ccc}
+  .hero-inner{padding-block:20px}
+  #route .map-frame,.strip-scroll,.map-legend,.pager,.day-actions{display:none}
+  .map-grid{grid-template-columns:1fr}
+  .day,.hotel,.prio div{break-inside:avoid}
+  .day,.day:nth-child(even){grid-template-columns:1fr 1.4fr}
+  .day:nth-child(even) .day-photo{order:0}
+  .section{padding-block:24px}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+/* ---------- Template additions ---------- */
+.hero.noimg{background:radial-gradient(120% 90% at 85% 10%,var(--kaki) 0%,transparent 55%),linear-gradient(135deg,var(--ai) 0%,#1b1d22 100%)}
+.hero.noimg::after{background:linear-gradient(180deg,rgba(14,16,22,0) 40%,rgba(14,16,22,.45) 100%)}
+.chip .k{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-inline:4px}
+.day-photo.plain span{font-size:clamp(40px,5.4vw,76px);letter-spacing:.02em;text-align:center;padding-inline:16px;margin-bottom:24px;line-height:1.05;overflow-wrap:anywhere}
+.day .kanji{font-size:20px;letter-spacing:.02em;white-space:nowrap}
+.panel .kanji-badge{font-size:22px;letter-spacing:.02em}
+.vbadge .panel .kanji-badge,.vbadge .day-photo.plain span,.vbadge .day .kanji{writing-mode:vertical-rl}
+.vbadge .day-photo.plain span{font-size:clamp(64px,9vw,112px);letter-spacing:.14em;margin-bottom:28px}
+.vbadge .day .kanji{font-size:30px;letter-spacing:.1em}
+.vbadge .panel .kanji-badge{font-size:26px;letter-spacing:.08em}
+.section[hidden],.prio:empty,.checks:empty{display:none}
+.trip-errors{position:fixed;left:12px;right:12px;bottom:12px;z-index:2000;max-width:780px;margin:0 auto;background:#fff4f2;border:2px solid var(--todo);border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.5;color:#5a1d16;box-shadow:0 8px 30px rgba(0,0,0,.18);max-height:45vh;overflow:auto}
+.trip-errors b{display:block;margin-bottom:4px}
+.trip-errors ul{margin:0;padding-left:20px}
+.trip-errors code{font-family:var(--font-mono);font-size:12.5px;background:#fde3de;padding:0 4px;border-radius:4px}
+.trip-errors button{float:right;appearance:none;border:0;background:transparent;font-size:18px;cursor:pointer;color:inherit}
+</style>
+</head>
+<body>
+<header class="hero" id="hero">
+  <div class="wrap hero-inner">
+    <div class="eyebrow" id="heroEyebrow"></div>
+    <h1 id="heroTitle"></h1>
+    <p class="hero-lede" id="heroLede"></p>
+    <div class="hero-stats" id="heroStats"></div>
+    <button class="print-btn" id="printBtn" type="button" hidden>Print or save as PDF</button>
+  </div>
+</header>
+
+<main>
+  <section class="section" id="route" aria-labelledby="route-h">
+    <div class="wrap">
+      <div class="section-head" data-head="route"></div>
+      <div class="strip-scroll" role="group" aria-label="Choose a day">
+        <div class="strip" id="strip"></div>
+      </div>
+      <div class="map-grid">
+        <div>
+          <div class="map-frame">
+            <div id="map" role="region" aria-label="Map of the trip route"></div>
+            <div class="map-tools"><button class="map-btn" id="fitTrip" type="button">Whole trip</button></div>
+            <div class="map-mode" id="mapMode" hidden>Map tiles couldn't load, so only the route is shown</div>
+          </div>
+          <div class="map-legend" aria-hidden="true">
+            <span><i class="lg-dot"></i>Overnight base</span>
+            <span><i class="lg-line base"></i>Whole-trip route</span>
+            <span><i class="lg-num">1</i>Selected day's stops</span>
+            <span><i class="lg-line"></i>Train, bus, car or taxi</span>
+            <span><i class="lg-line walk"></i>On foot</span>
+            <span><i class="lg-line air"></i>Ropeway, ferry or flight</span>
+            <span><i class="lg-line opt"></i>Optional or day trip</span>
+          </div>
+        </div>
+        <aside class="panel" id="panel" aria-live="polite"></aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="section band" id="days" aria-labelledby="days-h">
+    <div class="wrap">
+      <div class="section-head" data-head="days"></div>
+      <div class="days" id="dayList"></div>
+    </div>
+  </section>
+
+  <section class="section" id="stays" aria-labelledby="stays-h">
+    <div class="wrap">
+      <div class="section-head" data-head="stays"></div>
+      <div class="nights" id="nights"></div>
+      <div class="nights-scale mono" id="nightsScale" aria-hidden="true"></div>
+      <div class="book-summary" id="bookSummary"></div>
+      <div class="hotels" id="hotels"></div>
+    </div>
+  </section>
+
+  <section class="section band" id="money" aria-labelledby="money-h">
+    <div class="wrap">
+      <div class="section-head" data-head="money"></div>
+      <div class="budget-grid">
+        <div>
+          <div class="budget-total" id="budgetTotal"></div>
+          <div class="stack" id="stack" role="img"></div>
+          <div class="brows" id="brows"></div>
+          <div class="hotel-spend" id="hotelSpend"></div>
+        </div>
+        <div class="fine" id="budgetNotes"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="book" aria-labelledby="book-h">
+    <div class="wrap">
+      <div class="section-head" data-head="book"></div>
+      <div class="bk-groups" id="bookings"></div>
+    </div>
+  </section>
+
+  <section class="section band" id="matters" aria-labelledby="matters-h">
+    <div class="wrap">
+      <div class="section-head" data-head="matters"></div>
+      <div class="prio" id="prio"></div>
+      <div class="checks" id="checks"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="sign" id="footSign"></div>
+    <p id="footText"></p>
+    <div class="credits" id="credits"></div>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* Trip planner renderer. Reads window.TRIP (from trip.js) and builds the page.
+   Text from trip.js is escaped everywhere except fields documented as allowing HTML
+   (day "note", budget "notes", stay "extra.text", footer "credits"). */
+(function(){
+'use strict';
+const T=window.TRIP;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const errors=[];
+function showErrors(){
+  if(!errors.length)return;
+  const box=document.createElement('div');box.className='trip-errors';box.setAttribute('role','alert');
+  box.innerHTML=`<button type="button" aria-label="Dismiss">×</button><b>Something in trip.js needs fixing</b><ul>${[...new Set(errors)].slice(0,30).map(e=>`<li>${e}</li>`).join('')}</ul>`;
+  box.querySelector('button').onclick=()=>box.remove();document.body.appendChild(box);
+}
+if(!T){errors.push('<code>trip.js</code> did not load, or it has a syntax error. Open the browser console (F12) to see the line. The file must start with <code>window.TRIP = {</code>.');showErrors();return;}
+const code=s=>`<code>${esc(s)}</code>`;
+
+/* ---------- Settings ---------- */
+const LOCALE=T.locale||'en-US';
+const CUR=T.currency||'USD';
+const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
+function money(n){const frac=Math.abs(n%1)>0.004;try{return new Intl.NumberFormat(LOCALE,{style:'currency',currency:CUR,minimumFractionDigits:frac?2:0,maximumFractionDigits:frac?2:0}).format(n);}catch(e){return CUR+' '+n;}}
+const theme=T.theme||{};
+const COLOR_VARS={paper:'--paper',paperAlt:'--paper-2',card:'--card',ink:'--ink',inkSoft:'--ink-2',inkMuted:'--ink-3',primary:'--ai',primarySoft:'--ai-soft',accent:'--kaki',accentSoft:'--kaki-soft',optional:'--moss',optionalSoft:'--moss-soft',line:'--line',sea:'--sea',land:'--land',booked:'--ok',notBooked:'--todo'};
+Object.entries(theme.colors||{}).forEach(([k,v])=>{if(COLOR_VARS[k])document.documentElement.style.setProperty(COLOR_VARS[k],v);else errors.push(`theme.colors.${esc(k)} isn't a known colour name. Use one of: ${Object.keys(COLOR_VARS).join(', ')}.`);});
+const fonts=theme.fonts||{};
+if(fonts.display)document.documentElement.style.setProperty('--font-display',`'${fonts.display}',Georgia,serif`);
+if(fonts.body)document.documentElement.style.setProperty('--font-body',`'${fonts.body}',system-ui,sans-serif`);
+if(fonts.mono)document.documentElement.style.setProperty('--font-mono',`'${fonts.mono}',ui-monospace,monospace`);
+if(theme.verticalBadges)document.body.classList.add('vbadge');
+const css=getComputedStyle(document.documentElement);
+const C=n=>css.getPropertyValue(n).trim();
+const STAY_COLORS=theme.stayColors||[C('--ai'),C('--kaki'),C('--moss'),'#8a5a2b','#9c3f4f','#3d5f8a','#6b4f8a','#2f7a74'];
+
+/* ---------- Dates ---------- */
+const parseD=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||''));return m?new Date(+m[1],m[2]-1,+m[3],12):null;};
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n,12);
+const START=parseD(T.startDate);
+if(!START)errors.push(`${code('startDate')} must be a date written like ${code('2027-05-10')}.`);
+const S0=START||new Date();
+const dayDate=i=>addDays(S0,i);
+const fmt=(d,o)=>d.toLocaleDateString(LOCALE,o);
+const fDay=d=>fmt(d,{weekday:'short',day:'numeric',month:'short'});
+const fMD=d=>fmt(d,{month:'short',day:'numeric'});
+function fRange(a,b){try{const f=new Intl.DateTimeFormat(LOCALE,{month:'short',day:'numeric'});return f.formatRange?f.formatRange(a,b):`${f.format(a)} – ${f.format(b)}`;}catch(e){return fMD(a)+' – '+fMD(b);}}
+
+/* ---------- Places ---------- */
+const P={};
+Object.entries(T.places||{}).forEach(([k,v])=>{
+  const p=Array.isArray(v)?{lat:v[0],lon:v[1],name:v[2],local:v[3]}:Object.assign({},v);
+  p.name=p.name||k;p.local=p.local||'';
+  if(typeof p.lat!=='number'||typeof p.lon!=='number')errors.push(`Place ${code(k)} needs numeric ${code('lat')} and ${code('lon')}.`);
+  P[k]=p;
+});
+const known=(k,where)=>{if(P[k]&&typeof P[k].lat==='number')return true;errors.push(`${where} uses the place ${code(k)}, which isn't in ${code('places')}.`);return false;};
+const ll=k=>[P[k].lat,P[k].lon];
+const placeName=k=>P[k]?P[k].name:k;
+
+/* ---------- Images ---------- */
+const img=v=>!v?null:(typeof v==='string'?{src:v}:v);
+const credit=im=>im&&(im.credit||im.license)?`Photo: ${im.link?`<a href="${esc(im.link)}" target="_blank" rel="noopener">${esc(im.credit||'source')}</a>`:esc(im.credit||'')}${im.license?' · '+esc(im.license):''}`:'';
+
+/* ---------- Days ---------- */
+const DAYS=(T.days||[]).map((d,i)=>{
+  const day=Object.assign({},d);day.i=i;day.date=dayDate(i);
+  day.stops=(d.stops||[]).map(s=>Array.isArray(s)?{place:s[0],note:s[1],optional:!!s[2],mode:s[3]}:s).filter(s=>known(s.place,`Day ${i+1} (stops)`));
+  day.plan=d.plan||[];day.tags=d.tags||[];
+  day.badge=d.badge||(day.stops[0]?placeName(day.stops[0].place):String(i+1));
+  if(!d.title)errors.push(`Day ${i+1} needs a ${code('title')}.`);
+  return day;
+});
+if(!DAYS.length)errors.push(`Add at least one entry to ${code('days')}.`);
+
+/* ---------- Stays ---------- */
+const STAYS=(T.stays||[]).map((s,i)=>{
+  const st=Object.assign({},s);st.idx=i;st.id=s.id||('stay'+i);
+  st.ci=parseD(s.checkIn);
+  if(!st.ci){errors.push(`Stay "${esc(s.name||i+1)}" needs ${code('checkIn')} written like ${code('2027-05-10')}.`);st.ci=S0;}
+  st.nights=Math.max(1,+s.nights||1);
+  st.co=addDays(st.ci,st.nights);
+  st.day=Math.round((st.ci-S0)/864e5);
+  st.dates=fRange(st.ci,st.co);
+  st.name=s.name||placeName(s.place);
+  st.badge=s.badge||String(st.name).slice(0,1);
+  st.label=s.label||st.name;
+  known(s.place,`Stay "${esc(st.name)}"`);
+  return st;
+});
+const NIGHTS=STAYS.reduce((n,s)=>n+s.nights,0);
+const stayForDay=i=>STAYS.find(s=>i>=s.day&&i<s.day+s.nights);
+const statusPill=s=>s.booked?'<span class="status ok">✓ Booked</span>':'<span class="status todo">Not booked yet</span>';
+
+/* ---------- Route geometry ---------- */
+/* Optional precise paths: paths: {"from>to": [[mode, [[lat,lon], ...]], ...]}. Otherwise a straight line. */
+const PATHS=T.paths||{};
+function legSegs(a,b,mode){
+  if(PATHS[a+'>'+b])return PATHS[a+'>'+b];
+  const r=PATHS[b+'>'+a];if(r)return r.slice().reverse().map(([m,c])=>[m,c.slice().reverse()]);
+  return [[mode||'line',[ll(a),ll(b)]]];
+}
+const legLine=(a,b)=>legSegs(a,b).flatMap(s=>s[1]);
+const pathThrough=ids=>ids.slice(1).flatMap((k,i)=>legLine(ids[i],k));
+const dedupe=a=>a.filter((k,i)=>k!==a[i-1]);
+const ROUTE=(T.route||dedupe(STAYS.map(s=>s.place))).filter(k=>known(k,code('route')));
+const DAYTRIPS=(T.dayTrips||[]).filter(e=>known(e.from,'A day trip')&&known(e.to,'A day trip'));
+const MARKERS=(T.markers||[]).filter(m=>known(m.place,'A map marker'));
+const DASH={walk:{dashArray:'1 7',lineCap:'round'},ropeway:{dashArray:'7 6'},ferry:{dashArray:'7 6'},flight:{dashArray:'7 6'},air:{dashArray:'7 6'},link:{dashArray:'1 7',lineCap:'round'}};
+
+/* ---------- Text helpers ---------- */
+const GO_LABEL={walk:'Walk',train:'Train',highspeed:'High-speed train',shinkansen:'Shinkansen',subway:'Subway',metro:'Metro',tram:'Tram',cable:'Cable car',funicular:'Funicular',ropeway:'Ropeway',bus:'Bus',coach:'Coach',taxi:'Taxi',car:'Car',drive:'Drive',ferry:'Ferry',boat:'Boat',flight:'Flight',bike:'Bike'};
+const GO_GROUP={walk:'Walk',train:'Train',highspeed:'Train',shinkansen:'Train',subway:'Train',metro:'Train',tram:'Train',cable:'Train',funicular:'Train',ropeway:'Ropeway',bus:'Bus',coach:'Bus',taxi:'Car',car:'Car',drive:'Car',ferry:'Boat',boat:'Boat',flight:'Flight',bike:'Bike'};
+const GO_ORDER=['Flight','Train','Ropeway','Boat','Bus','Car','Bike','Walk'];
+const GO_CLASS={Train:'train',Walk:'walk',Bus:'bus',Car:'taxi',Ropeway:'ropeway',Boat:'bus',Flight:'ropeway',Bike:'walk'};
+const fmtMin=n=>n>=60?`${Math.floor(n/60)} hr${n%60?' '+(n%60)+' min':''}`:`${n} min`;
+const goSums=legs=>legs.reduce((s,[m,n])=>{const g=GO_GROUP[m]||'Other';s[g]=(s[g]||0)+(+n||0);return s;},{});
+const goChips=s=>[...GO_ORDER,'Other'].filter(k=>s[k]).map(k=>`<span class="gs gs-${GO_CLASS[k]||'bus'}"><b>${k==='Car'?'Car/taxi':k} time</b> ~${fmtMin(s[k])}</span>`).join('');
+const legClass=m=>({highspeed:'shinkansen',metro:'subway',tram:'subway',funicular:'cable'}[m]||m);
+function fmtStep(x){
+  if(typeof x==='string')return `<li>${esc(x)}</li>`;
+  const legs=x.legs||[];
+  return `<li class="timed${legs.length?' step':''}${x.optional?' opt':''}"><span class="t">${esc(x.time||'')}</span><div>`+
+  `${x.title?`<b class="ih">${esc(x.title)}${x.optional?' <span class="gs gs-opt">Optional</span>':''}</b>`:''}${x.text?`<p class="ix">${esc(x.text)}</p>`:''}`+
+  (legs.length?`<div class="go-sum">${goChips(goSums(legs))}</div><ol class="legs">${legs.map(([m,n,d])=>`<li class="lg-${legClass(m)}"><span class="lm">${esc(GO_LABEL[m]||m)} · ${fmtMin(+n||0)}</span><span>${esc(d||'')}</span></li>`).join('')}</ol>`:'')+`</div></li>`;
+}
+const dayTotals=d=>goSums(d.plan.filter(x=>typeof x==='object'&&!x.optional&&x.legs).flatMap(x=>x.legs));
+const L_=T.labels||{};
+const DEFAULT_HEADS={
+  route:{eyebrow:'The route',title:'Follow the journey',intro:"Pick a day to zoom the map to where we'll be, with each stop numbered in order. The overview traces the whole trip."},
+  days:{eyebrow:'Day by day',title:'The plan, day by day',intro:'Every day runs hotel to hotel, with travel time for each step.'},
+  stays:{eyebrow:"Where we'll sleep",title:'Stays',intro:''},
+  money:{eyebrow:'Money & logistics',title:'Budget',intro:''},
+  book:{eyebrow:'What to book, and when',title:'Booking timeline',intro:''},
+  matters:{eyebrow:'What matters most',title:'The places and experiences that matter',intro:'If plans have to bend, these are what we keep.'}
+};
+document.querySelectorAll('[data-head]').forEach(el=>{
+  const k=el.dataset.head,h=Object.assign({},DEFAULT_HEADS[k],(T.sections||{})[k]);
+  el.innerHTML=`<div class="eyebrow">${h.local?`<span class="local">${esc(h.local)}</span> `:''}${esc(h.eyebrow)}</div><h2 id="${k}-h">${esc(h.title)}</h2>${h.intro?`<p>${esc(h.intro)}</p>`:''}`;
+});
+const hide=id=>{$(id).hidden=true;};
+
+/* ---------- Hero ---------- */
+const H=T.hero||{};
+$('heroEyebrow').innerHTML=`${H.local?`<span class="local">${esc(H.local)}</span> `:''}${esc(H.eyebrow||'')}`;
+$('heroTitle').textContent=H.title||'Our trip';
+$('heroLede').textContent=H.lede||'';
+const heroImg=img(H.image);
+if(heroImg){
+  const i=document.createElement('img');i.className='hero-photo';i.alt='';i.src=heroImg.src;i.style.objectPosition=heroImg.position||'50% 60%';$('hero').prepend(i);
+  if(heroImg.caption||heroImg.credit){const c=document.createElement('span');c.className='hero-credit';c.innerHTML=[esc(heroImg.caption||''),heroImg.credit?`Photo: ${esc(heroImg.credit)}${heroImg.license?', '+esc(heroImg.license):''}`:''].filter(Boolean).join(' · ');$('hero').append(c);}
+}else $('hero').classList.add('noimg');
+
+const BUD=(T.budget&&T.budget.lines)||[];
+const TOT=BUD.reduce((s,b)=>s+(+b.amount||0),0);
+const lastDay=dayDate(Math.max(0,DAYS.length-1));
+const stats=T.stats||[
+  {value:fRange(S0,lastDay),label:`${S0.getFullYear()} · ${plural(DAYS.length,'day')}`},
+  STAYS.length?{value:plural(NIGHTS,'night'),label:'',id:'bookedStat'}:null,
+  STAYS.length?{value:plural(new Set(STAYS.map(s=>s.name)).size,'place'),label:STAYS.length>1?`${STAYS[0].name} to ${STAYS[STAYS.length-1].name}`:STAYS[0].name}:null,
+  TOT?{value:money(TOT),label:'Target'+(T.budget.excludes?' · excl. '+T.budget.excludes:'')}:null
+].filter(Boolean);
+$('heroStats').innerHTML=stats.map(s=>`<div><b>${esc(s.value)}</b><small${s.id?` id="${s.id}"`:''}>${esc(s.label||'')}</small></div>`).join('');
+
+/* ---------- Day list ---------- */
+const dayList=$('dayList');
+DAYS.forEach((d,i)=>{
+  const a=document.createElement('article');a.className='day';a.id='day-'+(i+1);
+  const im=img(d.image);
+  const cap=d.caption||'';
+  const fig=im?`<figure class="day-photo"><img loading="lazy" decoding="async" src="${esc(im.src)}" alt="${esc(cap||d.title)}" style="object-position:${esc(im.position||'50% 50%')}">${cap||credit(im)?`<figcaption>${esc(cap)}${credit(im)?`<span class="cr">${credit(im)}</span>`:''}</figcaption>`:''}</figure>`
+    :`<figure class="day-photo plain"><span aria-hidden="true">${esc(d.badge)}</span>${cap?`<figcaption>${esc(cap)}</figcaption>`:''}</figure>`;
+  const st=stayForDay(i);
+  const sleep=d.sleep!==undefined?d.sleep:(st?(st.hotel?`${st.hotel}, ${st.name}`:st.name):'');
+  const tot=dayTotals(d);
+  a.innerHTML=`${fig}
+  <div class="day-body">
+    <div class="day-head"><div class="stamp" aria-hidden="true"><b>${String(i+1).padStart(2,'0')}</b><span>${esc(fmt(d.date,{month:'numeric',day:'numeric'}))}</span></div>
+      <div><div class="day-meta">Day ${i+1} · ${esc(fDay(d.date))} ${d.date.getFullYear()}</div><h3>${esc(d.title)}</h3></div><div class="kanji" aria-hidden="true">${esc(d.badge)}</div></div>
+    ${d.tags.length?`<div class="tags">${d.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`:''}
+    ${d.travel||Object.keys(tot).length?`<div class="ticket"><b>Travel time</b>${esc(d.travel||'')}${Object.keys(tot).length?`<div class="day-tot"><span>Today, roughly:</span>${goChips(tot)}</div>`:''}</div>`:''}
+    ${d.plan.length?`<ul>${d.plan.map(fmtStep).join('')}</ul>`:''}
+    ${sleep?`<p class="sleep"><b>Sleep:</b> ${esc(sleep)}${st&&d.sleep===undefined?statusPill(st):''}</p>`:''}
+    ${d.note?`<div class="note">${d.note}</div>`:''}
+    ${d.stops.length?`<div class="day-actions"><button class="btn-line" type="button" data-day="${i}">Show day ${i+1} on the map</button></div>`:''}
+  </div>`;
+  dayList.appendChild(a);
+});
+dayList.addEventListener('click',e=>{const b=e.target.closest('[data-day]');if(!b)return;select(+b.dataset.day);$('route').scrollIntoView({block:'start'});});
+
+/* ---------- Stays ---------- */
+if(!STAYS.length)hide('stays');
+const mapsLink=q=>'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q);
+$('nights').setAttribute('aria-label',`${plural(NIGHTS,'night')} by location`);
+$('nights').innerHTML=STAYS.map((s,i)=>`<div style="flex:${s.nights};background:${STAY_COLORS[i%STAY_COLORS.length]}" title="${esc(s.name)}: ${esc(s.dates)}, ${plural(s.nights,'night')}"><b><span class="nl">${esc(s.name)}</span><span class="ns">${esc(s.badge)}</span></b><small><span class="nl">${plural(s.nights,'night')}</span><span class="ns">${s.nights}</span></small></div>`).join('');
+if(STAYS.length)$('nightsScale').innerHTML=`<span>${esc(fDay(STAYS[0].ci))}</span><span>${esc(fDay(STAYS[STAYS.length-1].co))}${T.lastDayNote?' · '+esc(T.lastDayNote):''}</span>`;
+const stayTotal=s=>{const c=s.cost||{};return c.total!=null?+c.total:(+c.perNight||0)*s.nights;};
+const perNight=s=>Math.round(stayTotal(s)/s.nights);
+$('hotels').innerHTML=STAYS.map(s=>{
+  const c=s.cost||{};const t=stayTotal(s);
+  const spend=t?`<div class="spend">${c.paid?`<b>Paid:</b> ${money(t)} for ${plural(s.nights,'night')}${s.nights>1?` (about ${money(perNight(s))}/night)`:''}`:`<b>${s.booked?'Budget (estimate)':'Budget'}:</b> about ${money(perNight(s))}/night, ${money(t)} for ${plural(s.nights,'night')}`}</div>`:'';
+  const link=s.link||(s.hotel?mapsLink(s.hotel+' '+s.name):'');
+  return `<div class="hotel ${s.booked?'is-booked':'is-todo'}">${statusPill(s)}<div class="when">${esc(s.dates)} · ${plural(s.nights,'night')}</div><h3>${esc(s.name)}${s.hotel?' · '+esc(s.hotel):''}</h3>${s.details?`<p>${esc(s.details)}</p>`:''}${s.extra?`<div class="value">${s.extra.label?`<b>${esc(s.extra.label)}:</b> `:''}${s.extra.text||''}</div>`:''}${spend}${link?`<a href="${esc(link)}" target="_blank" rel="noopener">${esc(s.linkText||'View the hotel')} ↗</a>`:''}</div>`;
+}).join('');
+{const done=STAYS.filter(s=>s.booked),left=STAYS.filter(s=>!s.booked);const el=$('bookSummary');
+  el.classList.toggle('done',!left.length);
+  el.innerHTML=`<b>${done.length} of ${plural(STAYS.length,'stay')} booked</b>`+(left.length?`<span class="left">Still to book: ${left.map(s=>`${esc(s.label)} (${esc(s.dates)})`).join(', ')}</span>`:'<span class="left">Every night is booked</span>');
+  const bs=$('bookedStat');if(bs)bs.textContent=`${done.length} of ${plural(STAYS.length,'stay')} booked`;}
+
+/* ---------- Budget ---------- */
+if(!BUD.length&&!STAYS.some(s=>s.cost))hide('money');
+const B=T.budget||{};
+$('budgetTotal').innerHTML=TOT?`<b class="mono">${money(TOT)}</b><span>${esc(B.totalNote||'')}</span>`:'';
+$('stack').setAttribute('aria-label','Budget split: '+BUD.map(b=>`${b.label} ${Math.round(b.amount/TOT*100)}%`).join(', '));
+const BCOL=[C('--ai'),C('--moss'),C('--kaki'),'#c9a46a','#9c3f4f','#3d5f8a'];
+BUD.forEach((b,i)=>{b.color=b.color||BCOL[i%BCOL.length];});
+$('stack').innerHTML=BUD.map(b=>`<i style="width:${(b.amount/TOT*100).toFixed(2)}%;background:${esc(b.color)}"></i>`).join('');
+$('brows').innerHTML=BUD.map(b=>`<div class="brow"><i class="sw" style="background:${esc(b.color)}"></i><div><b>${esc(b.label)}</b>${b.note?`<p>${esc(b.note)}</p>`:''}</div><div class="amt">${money(+b.amount)}<span class="pct">${Math.round(b.amount/TOT*100)}%</span></div></div>`).join('');
+$('budgetNotes').innerHTML=(B.notes||[]).map(p=>`<p>${p}</p>`).join('');
+{const costed=STAYS.filter(s=>s.cost);
+ if(costed.length){
+  const plan=BUD.find(b=>b.stays);
+  const rows=costed.map(s=>{const c=s.cost;const tag=s.booked?(c.paid?'Booked · paid':'Booked · estimate'):'Estimate';
+    return `<div class="srow"><span class="sk" aria-hidden="true">${esc(s.badge)}</span><div><b>${esc(s.label)}</b> <small>${esc(s.dates)} · ${plural(s.nights,'night')}</small>${statusPill(s)}${c.note?`<p>${esc(c.note)}</p>`:''}</div><div class="amt">${money(stayTotal(s))}<span class="pct">${c.total!=null?'about ':''}${money(perNight(s))}/night · ${tag}</span></div></div>`;});
+  const sum=costed.reduce((t,s)=>t+stayTotal(s),0);
+  const diff=plan?sum-plan.amount:0;
+  $('hotelSpend').innerHTML=`<h3>Hotel spend by stay</h3>`+rows.join('')+
+   `<div class="stotal"><b>${STAYS.every(s=>s.booked&&s.cost&&s.cost.paid)?'Hotel total':'Estimated hotel total'} ${money(sum)}</b>${plan?`<span class="${diff>0?'over':'under'}">${diff>0?money(diff)+' over':money(-diff)+' under'} the ${money(plan.amount)} hotel line</span>`:''}</div>`;
+ }}
+
+/* ---------- Booking timeline ---------- */
+const BK=T.bookings||{};
+const groups=(BK.groups||[]).filter(g=>(g.items||[]).length);
+if(!groups.length)hide('book');
+$('bookings').innerHTML=groups.map((g,gi)=>`<div class="bk-group"><h3>${esc(g.title||'')}</h3><ol class="bk">${g.items.map(b=>`<li class="${gi?'bk-alt':''}">`+
+  `<div class="bk-when"><b>${esc(b.when||b.for||'')}</b>${b.whenNote?`<small>${esc(b.whenNote)}</small>`:''}</div>`+
+  `<div class="bk-body"><div class="bk-h">${esc(b.title||'')}${b.for&&b.when?`<span class="bk-for">for ${esc(b.for)}</span>`:''}</div>${b.text?`<p>${esc(b.text)}</p>`:''}${b.how?`<p class="bk-how">${esc(b.how)}</p>`:''}</div></li>`).join('')}</ol></div>`).join('');
+
+/* ---------- Priorities + checklists ---------- */
+$('prio').innerHTML=(T.priorities||[]).map(p=>`<div><h3>${esc(p.title)}${p.local?` <span>${esc(p.local)}</span>`:''}</h3><p>${esc(p.text||'')}</p></div>`).join('');
+const todo=T.toDecide||[],later=T.saveForLater||[];
+$('checks').innerHTML=(todo.length?`<div class="todo"><h3>Still to check or decide</h3><ul>${todo.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></div>`:'')+
+  (later.length?`<div class="later"><h3>Saving for another trip</h3><ul>${later.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>${T.saveForLaterNote?`<p style="margin-top:10px;font-size:13.5px;color:var(--ink-2)">${esc(T.saveForLaterNote)}</p>`:''}</div>`:'');
+if(!(T.priorities||[]).length&&!todo.length&&!later.length)hide('matters');
+
+/* ---------- Footer ---------- */
+const F=T.footer||{};
+$('footSign').textContent=F.sign||H.title||'';
+$('footText').textContent=F.text||'Times, prices, opening hours and policies are planning estimates until confirmed.';
+{const photos=[];
+ if(heroImg&&heroImg.credit)photos.push([heroImg.caption||'Header',heroImg]);
+ DAYS.forEach((d,i)=>{const im=img(d.image);if(im&&im.credit)photos.push([`Day ${i+1}${d.caption?' · '+d.caption:''}`,im]);});
+ const mapCfg=T.map||{};
+ $('credits').innerHTML=(photos.length?`<div><b>Photos</b></div><ul>${photos.map(([t,im])=>`<li>${esc(t)}: ${im.link?`<a href="${esc(im.link)}" target="_blank" rel="noopener">${esc(im.credit)}</a>`:esc(im.credit)}${im.license?', '+esc(im.license):''}</li>`).join('')}</ul>`:'')+
+  `<div><b>Map</b>: ${mapCfg.creditHtml||'Tiles © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a> and contributors, including <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. Built with <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>.'}</div>`+
+  (F.credits?`<div>${F.credits}</div>`:'')+
+  `<div>Made with the open-source <a href="https://github.com/${esc(T.templateRepo||'')}" target="_blank" rel="noopener">trip planner template</a>.</div>`;
+ if(!T.templateRepo)$('credits').lastElementChild.remove();
+}
+
+/* ---------- Day strip ---------- */
+const strip=$('strip');
+strip.style.gridTemplateColumns=`repeat(${DAYS.length+1},minmax(80px,1fr))`;
+strip.style.minWidth=`${(DAYS.length+1)*86}px`;
+const OV=T.overview||{};
+strip.innerHTML=`<button class="chip all" type="button" data-i="-1" aria-pressed="true"><span class="d">ALL</span><span class="k">${esc(OV.badge||'✦')}</span><span class="w">Whole trip</span></button>`+
+  DAYS.map((d,i)=>`<button class="chip${d.dayTrip?' trip':''}" type="button" data-i="${i}" aria-pressed="false" aria-label="Day ${i+1}, ${esc(fDay(d.date))}: ${esc(d.title)}"><span class="d">${esc(fMD(d.date).toUpperCase())}</span><span class="k">${esc(d.short||d.badge)}</span><span class="w">${esc(fmt(d.date,{weekday:'short'}))} · D${i+1}</span></button>`).join('');
+strip.addEventListener('click',e=>{const b=e.target.closest('.chip');if(b)select(+b.dataset.i);});
+
+/* ---------- Panel ---------- */
+const panel=$('panel');
+function renderPanel(i){
+  if(i<0){
+    panel.innerHTML=`<div class="panel-top"><div class="panel-date">${esc(fRange(S0,lastDay))} · ${plural(DAYS.length,'day')}</div><div class="pager"><button type="button" data-step="-1" disabled aria-label="Previous day">←</button><button type="button" data-step="1" aria-label="Next day: day 1">→</button></div></div>
+    <div class="panel-title"><h3>${esc(OV.title||`${plural(STAYS.length,'base')}, one journey`)}</h3><span class="kanji-badge" aria-hidden="true">${esc(OV.badge||'✦')}</span></div>
+    <p class="panel-sum">${esc(OV.text||'Tap a base to jump to its first day.')}</p>
+    <ul class="bases">${STAYS.map(s=>`<li><button type="button" data-goto="${Math.max(0,s.day)}"><span class="bk">${esc(s.badge)}</span><span class="bn">${esc(s.name)}<small>${esc(s.short||s.hotel||'')}</small></span><span class="bd">${esc(s.dates)} · ${s.nights}n${statusPill(s)}</span></button></li>`).join('')}</ul>
+    <div class="panel-links"><a href="#days">Read the day-by-day plan ↓</a></div>`;
+    return;
+  }
+  const d=DAYS[i];
+  const q=d.mapsQuery||(d.stops[0]?placeName(d.stops[0].place):'');
+  panel.innerHTML=`<div class="panel-top"><div class="panel-date">Day ${String(i+1).padStart(2,'0')} · ${esc(fDay(d.date))}</div><div class="pager"><button type="button" data-step="-1" aria-label="${i===0?'Back to the whole trip':'Previous day: day '+i}">←</button><button type="button" data-step="1" ${i===DAYS.length-1?'disabled':''} aria-label="Next day${i<DAYS.length-1?': day '+(i+2):''}">→</button></div></div>
+  <div class="panel-title"><h3>${esc(d.title)}</h3><span class="kanji-badge" aria-hidden="true">${esc(d.badge)}</span></div>
+  ${d.summary?`<p class="panel-sum">${esc(d.summary)}</p>`:''}
+  ${d.stops.length?`<ol class="stops">${d.stops.map((s,j)=>`<li class="${s.optional?'opt':''}"><span class="n">${j+1}</span><button type="button" data-stop="${j}">${esc(placeName(s.place))}</button><small>${s.optional?'Optional · ':''}${esc(s.note||'')}</small></li>`).join('')}</ol>`:''}
+  ${d.travel?`<div class="ticket"><b>Travel time</b>${esc(d.travel)}</div>`:''}
+  <div class="panel-links">${q?`<a href="${mapsLink(q)}" target="_blank" rel="noopener">Open in Google Maps ↗</a>`:''}<a href="#day-${i+1}">Full plan for day ${i+1} ↓</a></div>`;
+}
+panel.addEventListener('click',e=>{
+  const s=e.target.closest('[data-step]');if(s){select(Math.max(-1,Math.min(DAYS.length-1,cur+(+s.dataset.step))));return;}
+  const g=e.target.closest('[data-goto]');if(g){select(+g.dataset.goto);return;}
+  const t=e.target.closest('[data-stop]');if(t&&mapReady){const m=stopMarkers[+t.dataset.stop];if(m){map.flyTo(m.getLatLng(),Math.max(map.getZoom(),14),{duration:.6});m.openTooltip();}}
+});
+
+/* ---------- Map ---------- */
+let map=null,mapReady=false,tripLayer,dayLayer,stopMarkers=[],tripMarkers=[];
+const COL={base:C('--ai'),day:C('--kaki'),opt:C('--moss')};
+function initMap(){
+  if(typeof L==='undefined'){$('map').innerHTML='<div class="map-msg">The interactive map needs an internet connection to load. Everything else on this page works offline.</div>';return;}
+  const all=Object.values(P).filter(p=>typeof p.lat==='number').map(p=>[p.lat,p.lon]);
+  if(!all.length){$('map').innerHTML='<div class="map-msg">Add some places to trip.js to see them on the map.</div>';return;}
+  map=L.map('map',{zoomControl:false,scrollWheelZoom:false,zoomSnap:.25,minZoom:2,maxZoom:18,worldCopyJump:true});
+  map.fitBounds(L.latLngBounds(all).pad(.2));
+  L.control.zoom({position:'topright'}).addTo(map);
+  map.on('click',()=>map.scrollWheelZoom.enable());map.on('mouseout',()=>map.scrollWheelZoom.disable());
+  map.attributionControl.setPrefix(false);
+  const mc=T.map||{};
+  const tiles=L.tileLayer(mc.tiles||'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,maxNativeZoom:mc.maxNativeZoom||18,className:mc.warm===false?'':'tiles-warm',attribution:mc.attribution||'Tiles © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a> — Esri, HERE, Garmin, USGS, OpenStreetMap contributors and the GIS user community'});
+  let ok=0,bad=0;
+  tiles.on('tileload',()=>{ok++;$('mapMode').hidden=true;});
+  tiles.on('tileerror',()=>{bad++;if(!ok&&bad>=4)$('mapMode').hidden=false;});
+  tiles.addTo(map);
+  map.on('zoomend',()=>setTimeout(runDeclutter,30));
+  tripLayer=L.layerGroup().addTo(map);dayLayer=L.layerGroup().addTo(map);
+  mapReady=true;
+}
+function drawTrip(dim){
+  tripLayer.clearLayers();tripMarkers=[];
+  const op=dim?.35:.9;
+  if(ROUTE.length>1)L.polyline(pathThrough(ROUTE),{color:COL.base,weight:3,opacity:op,dashArray:'8 7',lineJoin:'round',interactive:false}).addTo(tripLayer);
+  DAYTRIPS.forEach(e=>L.polyline(pathThrough([e.from,...(e.via||[]),e.to]),{color:COL.opt,weight:2.5,opacity:op,dashArray:'2 6',lineCap:'round',interactive:false}).addTo(tripLayer));
+  /* One marker per base name: two stays in the same city share a marker and a label. */
+  const byName=new Map();STAYS.forEach(s=>{if(!byName.has(s.name))byName.set(s.name,[]);byName.get(s.name).push(s);});
+  byName.forEach(list=>{
+    const s=list[0];if(!P[s.place])return;
+    const m=L.marker(ll(s.place),{keyboard:false,title:s.name,icon:L.divIcon({className:'',html:`<div class="mk-base${dim?' dim':''}">${esc(s.badge)}</div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(tripLayer);
+    m.on('click',()=>select(Math.max(0,s.day)));tripMarkers.push(m);
+    if(!dim){const n=list.reduce((t,x)=>t+x.nights,0);
+      m.bindTooltip(`${esc(s.name)} · ${plural(n,'night')}<small>${list.map(x=>esc(x.dates)).join(', ')}</small>`,{permanent:true,direction:s.labelSide||'right',offset:[14,0],className:'tt base'});}
+  });
+  if(!dim){
+    DAYTRIPS.forEach(e=>{const cm=L.circleMarker(ll(e.to),{radius:5,color:'#fff',weight:2,fillColor:COL.opt,fillOpacity:1});
+      const when=e.day?fMD(dayDate(e.day-1)):'';
+      cm.bindTooltip(`${esc(e.label||placeName(e.to)+' · day trip')}${when?`<small>${esc(when)}</small>`:''}`,{permanent:true,direction:'right',offset:[8,0],className:'tt'}).addTo(tripLayer);tripMarkers.push(cm);});
+    MARKERS.forEach(mk=>{const cm=L.circleMarker(ll(mk.place),{radius:5,color:'#fff',weight:2,fillColor:COL.base,fillOpacity:1});
+      cm.bindTooltip(`${esc(mk.label||placeName(mk.place))}${mk.sub?`<small>${esc(mk.sub)}</small>`:''}`,{permanent:!!mk.alwaysShow,direction:'right',offset:[8,0],className:'tt'}).addTo(tripLayer);if(mk.alwaysShow)tripMarkers.push(cm);});
+  }
+}
+function drawDay(i){
+  dayLayer.clearLayers();stopMarkers=[];
+  const d=DAYS[i];const main=d.stops.filter(s=>!s.optional);
+  const segs=main.slice(1).flatMap((s,j)=>legSegs(main[j].place,s.place,s.mode));
+  segs.forEach(([m,c])=>L.polyline(c,{color:'#fff',weight:8,opacity:.85,lineJoin:'round',interactive:false}).addTo(dayLayer));
+  segs.forEach(([m,c])=>L.polyline(c,Object.assign({color:COL.day,weight:4,opacity:1,lineJoin:'round',interactive:false},DASH[m]||{})).addTo(dayLayer));
+  let lastMain=null;
+  d.stops.forEach(s=>{if(!s.optional){lastMain=s.place;return;}if(lastMain)L.polyline(legLine(lastMain,s.place),{color:COL.opt,weight:3,dashArray:'2 7',lineCap:'round',interactive:false}).addTo(dayLayer);});
+  const c=L.latLngBounds(d.stops.map(s=>ll(s.place))).getCenter();
+  d.stops.forEach((s,j)=>{
+    const p=P[s.place];
+    const m=L.marker(ll(s.place),{zIndexOffset:1000+j,title:p.name,icon:L.divIcon({className:'',html:`<div class="mk-stop${s.optional?' opt':''}">${j+1}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}).addTo(dayLayer);
+    const dir=p.lon<c.lng-.0001?'left':'right';
+    m.bindTooltip(`${esc(p.name)}${p.local?`<small>${esc(p.local)}</small>`:''}`,{permanent:true,direction:dir,offset:[dir==='left'?-14:14,0],className:'tt'});
+    stopMarkers.push(m);
+  });
+}
+
+let cur=-1;
+function fitOpts(extra){const w=$('map').clientWidth;const x=Math.round(Math.min(150,w*.16));const o=w<560?{paddingTopLeft:[28,56],paddingBottomRight:[28,28]}:{paddingTopLeft:[x,64],paddingBottomRight:[x,44]};return Object.assign(o,extra||{});}
+const DIRS={right:[14,0],left:[-14,0],top:[0,-14],bottom:[0,14]};
+function overlaps(a,b){return !(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom);}
+/* Keep permanent labels inside the map and off each other: try each side in turn, hide only if nothing fits. */
+function declutter(markers){
+  const box=$('map').getBoundingClientRect();
+  const placed=markers.map(m=>m.getElement&&m.getElement()&&m.getElement().getBoundingClientRect()).filter(Boolean).map(r=>({left:r.left+3,right:r.right-3,top:r.top+3,bottom:r.bottom-3}));
+  markers.forEach(m=>{
+    const t=m.getTooltip();if(!t||!t.options.permanent)return;const el=t.getElement();if(!el)return;
+    const pref=t._pref||(t._pref=t.options.direction);
+    const order=[pref,...['right','left','top','bottom'].filter(d=>d!==pref)];
+    el.style.visibility='';
+    for(const d of order){
+      t.options.direction=d;t.options.offset=L.point(DIRS[d]);t.update();
+      const r=el.getBoundingClientRect();
+      const inside=r.left>=box.left+6&&r.right<=box.right-6&&r.top>=box.top+6&&r.bottom<=box.bottom-22;
+      if(inside&&!placed.some(p=>overlaps(p,r))){placed.push(r);return;}
+    }
+    el.style.visibility='hidden';
+  });
+}
+let declutterSet=[];
+function runDeclutter(){if(mapReady)declutter(declutterSet);}
+function overviewPoints(){
+  const pts=[...ROUTE,...STAYS.map(s=>s.place),...DAYTRIPS.map(e=>e.to),...MARKERS.map(m=>m.place)].filter(k=>P[k]).map(ll);
+  return pts.length?pts:Object.values(P).map(p=>[p.lat,p.lon]);
+}
+function select(i,instant){
+  cur=i;
+  strip.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.i===i)));
+  const chip=strip.querySelector(`.chip[data-i="${i}"]`);if(chip){const sc=strip.parentElement;sc.scrollTo({left:chip.offsetLeft-sc.clientWidth/2+chip.clientWidth/2,behavior:instant?'auto':'smooth'});}
+  document.querySelectorAll('.day').forEach((el,j)=>el.classList.toggle('is-current',j===i));
+  renderPanel(i);
+  if(!mapReady)return;
+  map.once('moveend',runDeclutter);
+  const d=DAYS[i];
+  if(i<0||!d.stops.length){
+    dayLayer.clearLayers();stopMarkers=[];drawTrip(false);declutterSet=tripMarkers;
+    const b=L.latLngBounds(overviewPoints());
+    instant?map.fitBounds(b,fitOpts({maxZoom:13})):map.flyToBounds(b,fitOpts({maxZoom:13,duration:.8}));
+  }else{
+    drawDay(i);
+    const pts=(d.focus?d.focus.map(j=>d.stops[j]).filter(Boolean):d.stops).map(s=>ll(s.place));
+    const b=L.latLngBounds(pts);
+    const wide=L.latLngBounds(d.stops.map(s=>ll(s.place)));
+    tripLayer.clearLayers();tripMarkers=[];
+    if(wide.getNorthEast().distanceTo(wide.getSouthWest())>60000)drawTrip(true);
+    declutterSet=stopMarkers;
+    instant?map.fitBounds(b,fitOpts({maxZoom:15})):map.flyToBounds(b,fitOpts({maxZoom:15,duration:.8}));
+  }
+  setTimeout(runDeclutter,instant?80:1100);
+}
+$('fitTrip').addEventListener('click',()=>select(-1));
+document.addEventListener('keydown',e=>{
+  const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.key==='ArrowRight'&&cur<DAYS.length-1)select(cur+1);
+  if(e.key==='ArrowLeft'&&cur>-1)select(cur-1);
+});
+window.addEventListener('resize',()=>{if(mapReady){map.invalidateSize();runDeclutter();}});
+try{if(window.self===window.top){const pb=$('printBtn');pb.hidden=false;pb.addEventListener('click',()=>window.print());}}catch(e){}
+
+try{initMap();select(-1,true);}catch(e){errors.push('The map failed to draw: '+esc(e.message));}
+showErrors();
+})();
+</script>
+</body>
+</html>
