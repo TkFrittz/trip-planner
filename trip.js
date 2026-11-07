@@ -4,6 +4,19 @@
    This is the only file you need to edit. Replace the example trip
    below with your own, save, and refresh index.html in your browser.
 
+   Photos
+   - Put your photos in the images folder and point to them below, e.g.
+     image: 'images/day1.jpg'. The example photos are in that folder too;
+     delete the ones you don't use.
+   - Add credit, license and link to a photo and it's credited in the footer.
+   - A day with no image shows its badge on a coloured tile instead.
+
+   Sharing
+   - "Print or save as PDF" in the page header gives a clean printout:
+     no map, photos as small banners, days flowing across pages.
+   - "Save as one file" downloads a single .html file with your photos and
+     this trip built in, ready to email. Edit this file, not the saved one.
+
    Tips
    - Keep the commas between items, and the quotes around text.
    - If you need an apostrophe inside 'single quotes', write it as \'
@@ -30,7 +43,10 @@ window.TRIP = {
     title: 'Portugal, slowly.',
     lede: 'Tiled streets and custard tarts in Lisbon, palaces in the Sintra hills, port cellars in Porto and a train ride up the Douro.',
     // (optional) a header photo. Put the file in the images folder, or use a full https:// link.
-    // image: { src: 'images/header.jpg', caption: 'Ribeira, Porto', credit: 'Your name', license: 'CC BY 4.0', position: '50% 60%' },
+    // position picks which part stays in view when the photo is cropped: '50% 50%' is the centre.
+    image: { src: 'images/porto-rabelo-boats.jpg', caption: 'Rabelo boats on the Douro, Porto', position: '50% 55%',
+             credit: 'Jakub Hałun', license: 'CC BY 4.0',
+             link: 'https://commons.wikimedia.org/wiki/File:Rabelo_boats_and_Ribeira_seen_from_Cais_de_Gaia,_20250605_1623_9879.jpg' },
   },
 
   /* ---------- Colours and fonts (all optional) ---------- */
@@ -142,7 +158,9 @@ window.TRIP = {
       title: 'Olá, Lisboa',
       short: 'Lisbon',           // label on the day chip above the map
       badge: 'Lisboa',           // big word on days without a photo
-      caption: 'Arrive, check in, and an easy evening in Alfama',
+      caption: 'Tram 28 at Largo de Santa Luzia, by tonight’s sunset viewpoint',
+      image: { src: 'images/lisbon-tram-28.jpg', position: '50% 40%', credit: 'Jakub Hałun', license: 'CC BY 4.0',
+               link: 'https://commons.wikimedia.org/wiki/File:Tram_28_at_Largo_de_Santa_Luzia_in_Lisbon,_20250606_1958_0419.jpg' },
       summary: 'Land at Lisbon Airport, take the metro into town, check in and wander up to an Alfama viewpoint for sunset.',
       tags: ['Arrival', 'Easy evening'],
       travel: 'Airport → Rossio by metro (red then green line) ~30 min, or a taxi ~20 min',
@@ -162,7 +180,9 @@ window.TRIP = {
       title: 'Belém and LX Factory',
       short: 'Belém',
       badge: 'Belém',
-      caption: 'Monastery, tower and the original custard tarts',
+      caption: 'Belém Tower on the Tagus, built to guard the harbour in the 1500s',
+      image: { src: 'images/belem-tower.jpg', position: '40% 50%', credit: 'Diego Delso', license: 'CC BY-SA 3.0',
+               link: 'https://commons.wikimedia.org/wiki/File:Torre_de_Bel%C3%A9m,_Lisboa,_Portugal,_2012-05-12,_DD_16.JPG' },
       summary: 'Tram 15 out to Belém for the monastery, custard tarts and the tower, then LX Factory on the way back.',
       tags: ['Jerónimos', 'Pastéis de nata', 'LX Factory'],
       travel: 'Tram 15E from Praça da Figueira to Belém ~30 min each way',
@@ -180,7 +200,9 @@ window.TRIP = {
       short: 'Sintra',
       badge: 'Sintra',
       dayTrip: true,             // dashed day chip
-      caption: 'A day trip to Pena Palace and Quinta da Regaleira',
+      caption: 'Pena Palace above the forests of the Sintra hills',
+      image: { src: 'images/pena-palace.jpg', position: '50% 30%', credit: 'Jakub Hałun', license: 'CC BY 4.0',
+               link: 'https://commons.wikimedia.org/wiki/File:Pal%C3%A1cio_Nacional_da_Pena,_Sintra,_Portugal,_20250606_1155_0102.jpg' },
       summary: 'Early train to Sintra, bus up to Pena Palace, walk down to Quinta da Regaleira, train back for dinner.',
       tags: ['Day trip', 'Pena Palace', 'Regaleira'],
       travel: 'Rossio → Sintra by train ~40 min; bus 434 to Pena ~15 min',
@@ -197,7 +219,9 @@ window.TRIP = {
       title: 'North to Porto',
       short: 'Porto',
       badge: 'Porto',
-      caption: 'The Alfa Pendular up the coast, then the Ribeira at dusk',
+      caption: 'Porto’s Ribeira, seen from across the river in Gaia',
+      image: { src: 'images/porto-ribeira.jpg', position: '60% 50%', credit: 'Jakub Hałun', license: 'CC BY 4.0',
+               link: 'https://commons.wikimedia.org/wiki/File:View_of_Ribeira_from_Cais_de_Gaia,_20250605_1628_9890.jpg' },
       summary: 'Check out, take the fast train to Porto, check in and walk down to the river.',
       tags: ['Alfa Pendular', 'Ribeira'],
       travel: 'Santa Apolónia → Porto Campanhã by Alfa Pendular ~2 hr 50 min; local train to São Bento ~5 min',
@@ -212,7 +236,9 @@ window.TRIP = {
       title: 'Books, tiles and port',
       short: 'Porto',
       badge: 'Porto',
-      caption: 'São Bento’s tiles, Livraria Lello and a cellar tour across the river',
+      caption: 'Tile murals in the entrance hall of São Bento station',
+      image: { src: 'images/sao-bento-tiles.jpg', credit: 'Diego Delso', license: 'CC BY-SA 4.0',
+               link: 'https://commons.wikimedia.org/wiki/File:Estaci%C3%B3n_de_tren_S%C3%A3o_Bento,_Oporto,_Portugal,_2019-06-02,_DD_06.jpg' },
       summary: 'A walking day: São Bento’s azulejos, Livraria Lello, the Clérigos Tower, then over the bridge for a port tasting.',
       tags: ['Azulejos', 'Livraria Lello', 'Port tasting'],
       plan: [
@@ -228,7 +254,9 @@ window.TRIP = {
       short: 'Douro',
       badge: 'Douro',
       dayTrip: true,
-      caption: 'The riverside railway to Pinhão',
+      caption: 'Pinhão and the terraced vineyards of the Douro',
+      image: { src: 'images/douro-pinhao.jpg', position: '50% 35%', credit: 'Sanjorgepinho', license: 'CC BY-SA 4.0',
+               link: 'https://commons.wikimedia.org/wiki/File:Pinh%C3%A3o,_heart_of_Alto_Douro_Wine_Region,_UNESCO_World_Heritage_Site.jpg' },
       summary: 'One of Europe’s great train rides, along the river through terraced vineyards to Pinhão and back.',
       tags: ['Day trip', 'Scenic railway', 'Vineyards'],
       travel: 'São Bento → Pinhão by regional train ~2 hr 30 min each way',
@@ -245,6 +273,7 @@ window.TRIP = {
       short: 'Home',
       badge: 'Adeus',
       caption: 'Metro to the airport and the flight home',
+      // No image on this day, so the page shows the badge ('Adeus') on a coloured tile instead.
       summary: 'Check out and take the metro to Porto Airport.',
       tags: ['Departure'],
       sleep: '',                 // set to '' to hide the "Sleep" line on the last day

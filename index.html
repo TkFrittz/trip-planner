@@ -363,22 +363,13 @@ footer a:hover{color:#fff}
   .nights small{font-size:11px}
   footer .credits ul{columns:1}
 }
-@media print{
-  .hero{color:#000;background:#fff}.hero::after,.hero img.hero-photo,.hero-actions,.hero-credit{display:none}
-  .hero .eyebrow,.hero-lede,.hero-stats small{color:#333}.hero-stats{border-color:#999}.hero-stats div{border-color:#ccc}
-  .hero-inner{padding-block:20px}
-  #route .map-frame,.strip-scroll,.map-legend,.pager,.day-actions{display:none}
-  .map-grid{grid-template-columns:1fr}
-  .day,.hotel,.prio div{break-inside:avoid}
-  .day,.day:nth-child(even){grid-template-columns:1fr 1.4fr}
-  .day:nth-child(even) .day-photo{order:0}
-  .section{padding-block:24px}
-  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
 /* ---------- Template additions ---------- */
 .hero.noimg{background:radial-gradient(120% 90% at 85% 10%,var(--kaki) 0%,transparent 55%),linear-gradient(135deg,var(--ai) 0%,#1b1d22 100%)}
 .hero.noimg::after{background:linear-gradient(180deg,rgba(14,16,22,0) 40%,rgba(14,16,22,.45) 100%)}
+.day-photo figcaption a,.hero-credit a{color:inherit;text-decoration:underline;text-decoration-color:rgba(255,255,255,.5)}
+.day-photo figcaption a:hover,.hero-credit a:hover{color:#fff}
 .chip .k{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-inline:4px}
 .day-photo.plain span{font-size:clamp(40px,5.4vw,76px);letter-spacing:.02em;text-align:center;padding-inline:16px;margin-bottom:24px;line-height:1.05;overflow-wrap:anywhere}
 .day .kanji{font-size:20px;letter-spacing:.02em;white-space:nowrap}
@@ -393,6 +384,46 @@ footer a:hover{color:#fff}
 .trip-errors ul{margin:0;padding-left:20px}
 .trip-errors code{font-family:var(--font-mono);font-size:12.5px;background:#fde3de;padding:0 4px;border-radius:4px}
 .trip-errors button{float:right;appearance:none;border:0;background:transparent;font-size:18px;cursor:pointer;color:inherit}
+/* ---------- Print ----------
+   Kept last so nothing above overrides it. Long days may run across pages; single steps, tickets and cards stay whole. */
+@media print{
+  @page{margin:14mm 12mm}
+  html{scroll-behavior:auto}
+  body{background:#fff;font-size:12.5px;line-height:1.5}
+  .wrap{max-width:none;padding-inline:0}
+  .section,.section.band{background:#fff;padding-block:8px 18px}
+  .section-head{margin-bottom:12px;gap:4px}
+  .section-head h2{font-size:24px}
+  h2,h3,.section-head{break-after:avoid}
+  .hero,.hero.noimg{color:#000;background:#fff;border-bottom:2px solid var(--ink)}
+  .hero::after,.hero img.hero-photo,.hero-actions,.hero-credit{display:none}
+  .hero-inner{padding-block:0 12px;gap:8px}
+  .hero h1{font-size:40px;text-shadow:none}
+  .hero .eyebrow{color:var(--kaki)}
+  .hero-lede{color:#333;text-shadow:none}
+  .hero-stats{border-color:#999;margin-top:4px}.hero-stats div{border-color:#ccc;padding:8px 16px 2px 0;margin-right:16px}.hero-stats b{font-size:18px}.hero-stats small{color:#555}
+  #route .map-frame,.strip-scroll,.map-legend,.pager,.day-actions,.panel-links,.trip-errors,.save-dlg,.leaflet-container{display:none!important}
+  .map-grid{display:block}
+  .panel{padding:14px 16px;gap:10px}
+  .days{gap:14px}
+  .day,.day:nth-child(even){display:block;break-inside:auto;box-shadow:none;border-color:var(--line)}
+  .day-photo,.day:nth-child(even) .day-photo{min-height:0;height:55mm;aspect-ratio:auto;order:0}
+  .day-photo.plain{display:none}
+  .day-body{padding:12px 16px 14px;gap:10px}
+  .day-head,.tags,.ticket,.note,.sleep,.day ul>li,.legs li{break-inside:avoid}
+  .day-head{break-after:avoid}
+  .hotels{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hotel,.prio>div,.brow,.srow,.bk li,.checks>div,.stotal{break-inside:avoid}
+  .prio{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .budget-grid{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px}
+  .budget-total b{font-size:34px}
+  footer{background:#fff;color:#333;padding-block:10px 0;border-top:2px solid var(--ink)}
+  footer .sign{color:#000;font-size:22px}
+  footer p,footer .credits{color:#444}
+  footer a{color:var(--ai)}
+  footer .credits{border-color:var(--line)}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 </style>
 </head>
 <body>
