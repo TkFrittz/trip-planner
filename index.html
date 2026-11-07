@@ -17,7 +17,7 @@
   if(T.pageTitle||(T.hero&&T.hero.title))document.title=T.pageTitle||T.hero.title;
   if(T.description){var m=document.querySelector('meta[name=description]');m&&m.setAttribute('content',T.description);}
   var url=f.url||'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap';
-  var l=document.createElement('link');l.rel='stylesheet';l.href=url;document.head.appendChild(l);
+  var l=document.createElement('link');l.id='tripFonts';l.rel='stylesheet';l.href=url;document.head.appendChild(l);
 })();
 </script>
 <style>
@@ -91,6 +91,19 @@ p{margin:0}
 .hero-credit{position:absolute;right:12px;bottom:8px;font-size:11px;color:rgba(255,255,255,.7)}
 .print-btn{justify-self:start;margin-top:6px;font:500 13px var(--font-body);color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:8px 16px;cursor:pointer}
 .print-btn:hover{background:rgba(255,255,255,.2)}
+.print-btn:disabled{opacity:.6;cursor:progress}
+.hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.hero-actions .print-btn{margin-top:0}
+.save-dlg{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;padding:16px;background:rgba(14,16,22,.55)}
+.save-dlg>div{background:var(--card);color:var(--ink);border-radius:var(--radius);padding:22px;max-width:480px;width:100%;display:grid;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-size:15px}
+.save-dlg h3{font-size:22px}
+.save-dlg p{color:var(--ink-2);font-size:14.5px}
+.save-dlg .row{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:4px}
+.save-dlg button{appearance:none;font:500 14px var(--font-body);border-radius:999px;padding:8px 16px;cursor:pointer;border:1px solid var(--ai);background:transparent;color:var(--ai)}
+.save-dlg button.primary{background:var(--ai);color:#fff}
+.save-dlg label.primary{display:inline-block;font:500 14px var(--font-body);border-radius:999px;padding:8px 16px;cursor:pointer;background:var(--ai);color:#fff}
+.save-dlg input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.save-dlg label.primary:focus-within{outline:3px solid var(--kaki);outline-offset:2px}
 
 /* ---------- Route map ---------- */
 .strip-scroll{overflow-x:auto;margin-inline:calc(var(--gutter)*-1);padding-inline:var(--gutter);scrollbar-width:thin;-webkit-overflow-scrolling:touch}
@@ -351,7 +364,7 @@ footer a:hover{color:#fff}
   footer .credits ul{columns:1}
 }
 @media print{
-  .hero{color:#000;background:#fff}.hero::after,.hero img.hero-photo,.print-btn,.hero-credit{display:none}
+  .hero{color:#000;background:#fff}.hero::after,.hero img.hero-photo,.hero-actions,.hero-credit{display:none}
   .hero .eyebrow,.hero-lede,.hero-stats small{color:#333}.hero-stats{border-color:#999}.hero-stats div{border-color:#ccc}
   .hero-inner{padding-block:20px}
   #route .map-frame,.strip-scroll,.map-legend,.pager,.day-actions{display:none}
@@ -389,7 +402,10 @@ footer a:hover{color:#fff}
     <h1 id="heroTitle"></h1>
     <p class="hero-lede" id="heroLede"></p>
     <div class="hero-stats" id="heroStats"></div>
-    <button class="print-btn" id="printBtn" type="button" hidden>Print or save as PDF</button>
+    <div class="hero-actions">
+      <button class="print-btn" id="printBtn" type="button" hidden>Print or save as PDF</button>
+      <button class="print-btn" id="saveBtn" type="button" title="Download this plan as one HTML file with the photos and trip details built in, to email or keep">Save as one file</button>
+    </div>
   </div>
 </header>
 
@@ -486,6 +502,8 @@ footer a:hover{color:#fff}
 (function(){
 'use strict';
 const T=window.TRIP;
+/* A copy of the page before anything is drawn, used by "Save as one file". */
+const PRISTINE=document.documentElement.cloneNode(true);
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const errors=[];
@@ -897,6 +915,106 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('resize',()=>{if(mapReady){map.invalidateSize();runDeclutter();}});
 try{if(window.self===window.top){const pb=$('printBtn');pb.hidden=false;pb.addEventListener('click',()=>window.print());}}catch(e){}
+
+/* ---------- Save as one file ----------
+   Builds a single HTML file with trip.js and every local photo built in, so the plan can be emailed or kept
+   without the images folder. Photos wider than MAX_W are shrunk to keep the file a sensible size.
+   Photos given as https:// links are built in too when the host allows it; otherwise they stay as links. */
+const saveBtn=$('saveBtn');
+const MAX_W=1800;
+const isData=s=>/^data:/i.test(s);
+const isRemote=s=>/^https?:/i.test(s);
+const baseName=s=>{try{return decodeURIComponent(String(s).split(/[?#]/)[0].split('/').pop()).toLowerCase();}catch(e){return String(s).toLowerCase();}};
+const readAsDataURL=blob=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(blob);});
+async function photoToDataURL(blob){
+  try{
+    const png=blob.type==='image/png';
+    const bmp=await createImageBitmap(blob);
+    const scale=Math.min(1,MAX_W/bmp.width);
+    if(scale<1||(!png&&blob.size>700000)){
+      const c=document.createElement('canvas');c.width=Math.round(bmp.width*scale);c.height=Math.round(bmp.height*scale);
+      c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);if(bmp.close)bmp.close();
+      return png?c.toDataURL('image/png'):c.toDataURL('image/jpeg',.82);
+    }
+    if(bmp.close)bmp.close();
+  }catch(e){/* not a format the canvas can read (e.g. SVG): keep the original bytes */}
+  return readAsDataURL(blob);
+}
+function imageRefs(trip){
+  const refs=[];
+  const add=(obj,key,label)=>{const v=obj&&obj[key];if(!v)return;const src=typeof v==='string'?v:v.src;if(src&&!isData(src))refs.push({obj,key,src,label});};
+  add(trip.hero,'image','Header');(trip.days||[]).forEach((d,i)=>add(d,'image','Day '+(i+1)));
+  return refs;
+}
+const setSrc=(r,data)=>{const v=r.obj[r.key];if(typeof v==='string')r.obj[r.key]=data;else v.src=data;};
+function dialog(html,setup){
+  return new Promise(res=>{
+    const w=document.createElement('div');w.className='save-dlg';w.setAttribute('role','dialog');w.setAttribute('aria-modal','true');
+    w.innerHTML=`<div>${html}</div>`;document.body.appendChild(w);
+    const done=v=>{w.remove();saveBtn.focus();res(v);};
+    w.addEventListener('keydown',e=>{if(e.key==='Escape')done(null);});
+    w.addEventListener('click',e=>{if(e.target===w)done(null);});
+    setup(w,done);
+    const f=w.querySelector('button,input');if(f)f.focus();
+  });
+}
+function askForPhotos(names){
+  const why=location.protocol==='file:'?"When the page is opened straight from a file, the browser won't let it read the photos by itself."
+    :"These photos couldn't be found next to the page. Check the file names in trip.js, or choose the photos here.";
+  return dialog(`<h3>Add your photos</h3><p>${why} Open your <b>images</b> folder, select the photos (Ctrl+A or ⌘A selects them all), and they'll be built into the saved file.</p><p class="mono" style="font-size:12.5px;overflow-wrap:anywhere">Needed: ${names.map(esc).join(', ')}</p><div class="row"><button type="button" data-a="skip">Save without them</button><label class="primary">Choose photos<input type="file" accept="image/*" multiple></label></div>`,
+    (w,done)=>{w.querySelector('[data-a=skip]').onclick=()=>done([]);w.querySelector('input').onchange=e=>done([...e.target.files]);});
+}
+function buildSingleFile(trip){
+  const doc=PRISTINE.cloneNode(true);
+  const fl=doc.querySelector('#tripFonts');if(fl)fl.remove();
+  const json=JSON.stringify(trip,null,1).replace(/</g,'\\u003c').split(String.fromCharCode(0x2028)).join('\\u2028').split(String.fromCharCode(0x2029)).join('\\u2029');
+  const inline=document.createElement('script');
+  inline.textContent=`\n/* Trip details, saved ${new Date().toISOString().slice(0,10)}. This file is self-contained; to keep editing, use trip.js in the template. */\nwindow.TRIP = ${json};\n`;
+  const tag=[...doc.querySelectorAll('script[src]')].find(s=>/(^|\/)trip\.js([?#]|$)/.test(s.getAttribute('src')));
+  if(tag)tag.replaceWith(inline);else doc.querySelector('head').prepend(inline);
+  return '<!doctype html>\n'+doc.outerHTML;
+}
+function download(html){
+  const title=T.pageTitle||(T.hero&&T.hero.title)||'trip';
+  const name=title.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'trip';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));a.download=name+'.html';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},5000);
+  return a.download;
+}
+async function saveOneFile(){
+  const label=saveBtn.textContent;saveBtn.disabled=true;saveBtn.textContent='Saving…';
+  try{
+    const trip=JSON.parse(JSON.stringify(T));
+    const refs=imageRefs(trip);
+    const got=new Map();
+    for(const r of refs){
+      if(!got.has(r.src)){let d=null;try{const resp=await fetch(r.src);if(resp.ok)d=await photoToDataURL(await resp.blob());}catch(e){}got.set(r.src,d);}
+      if(got.get(r.src))setSrc(r,got.get(r.src));
+    }
+    let left=refs.filter(r=>!got.get(r.src));
+    const local=left.filter(r=>!isRemote(r.src));
+    if(local.length){
+      const files=await askForPhotos([...new Set(local.map(r=>baseName(r.src)))]);
+      if(files===null)return;  // cancelled
+      const byName=new Map(files.map(f=>[f.name.toLowerCase(),f]));const conv=new Map();
+      for(const r of local){const f=byName.get(baseName(r.src));if(!f)continue;
+        if(!conv.has(f))conv.set(f,await photoToDataURL(f));setSrc(r,conv.get(f));got.set(r.src,true);}
+      left=refs.filter(r=>!got.get(r.src));
+      /* A local photo we couldn't include would show as a broken image, so fall back to the day's badge tile. */
+      left.filter(r=>!isRemote(r.src)).forEach(r=>{r.obj[r.key]=null;});
+    }
+    const name=download(buildSingleFile(trip));
+    saveBtn.textContent='Saved ✓';setTimeout(()=>{saveBtn.textContent=label;},2500);
+    if(left.length){
+      const remote=left.filter(r=>isRemote(r.src)),missing=left.filter(r=>!isRemote(r.src));
+      await dialog(`<h3>Saved ${esc(name)}</h3>${missing.length?`<p>These photos aren't in the file, so those days show their title tile instead: ${missing.map(r=>esc(r.label+' ('+baseName(r.src)+')')).join(', ')}.</p>`:''}${remote.length?`<p>These photos are online links that couldn't be copied in. They'll still show whenever the file is opened with an internet connection: ${remote.map(r=>esc(r.label)).join(', ')}.</p>`:''}<div class="row"><button type="button" class="primary">OK</button></div>`,
+        (w,done)=>{w.querySelector('button').onclick=()=>done(true);});
+    }
+  }catch(e){
+    await dialog(`<h3>Couldn't save</h3><p>${esc(e.message||e)}</p><div class="row"><button type="button" class="primary">OK</button></div>`,(w,done)=>{w.querySelector('button').onclick=()=>done(true);});
+  }finally{saveBtn.disabled=false;if(saveBtn.textContent==='Saving…')saveBtn.textContent=label;}
+}
+saveBtn.addEventListener('click',saveOneFile);
 
 try{initMap();select(-1,true);}catch(e){errors.push('The map failed to draw: '+esc(e.message));}
 showErrors();

@@ -12,6 +12,7 @@ A good-looking, single-page travel plan you fill in with your own trip: an inter
 - **Budget**: a split bar and line items, plus a check of hotel spend against your hotel budget.
 - **Booking timeline**, **what matters most**, **still to decide** and **saving for another trip** lists.
 - Dates, weekdays and currency are all worked out from your settings, in any language format.
+- **Save as one file**: one click downloads the whole plan as a single HTML file with your photos and trip details built in, ready to email or keep.
 
 ## Make it yours
 
@@ -71,6 +72,14 @@ image: { src: 'images/day1.jpg', credit: 'Photographer name', license: 'CC BY 4.
 ```
 
 `position` decides which part of the photo stays in view when it's cropped. Days without a photo show their `badge` text on a coloured tile instead. Photos around 1600 px wide and saved as JPEG at about 80% quality keep the page fast.
+
+### Sharing your plan as one file
+
+Your plan is normally a few files: `index.html`, `trip.js` and the `images` folder. To send it to someone, click **Save as one file** in the page header. You get a single `.html` file with the photos and all the trip details inside, which works on any computer or phone. Photos wider than 1800 px are shrunk to keep the file small. The map tiles still need an internet connection.
+
+If you opened `index.html` by double-clicking it, the browser won't let the page read your photos on its own. The button will ask you to pick them: open the `images` folder, select them all and click Open.
+
+The saved file is a snapshot. To make changes, edit `trip.js` and save a new copy.
 
 ### Travel legs
 
